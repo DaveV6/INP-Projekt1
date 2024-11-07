@@ -57,7 +57,8 @@ architecture behavioral of cpu is
     S_INCPTR, S_DECPTR,
     S_PRINT, S_STALLPRINT,
     S_INPUT, S_STALLINPUT, S_READINPUT,
-    S_TMPSTARTR, S_TMPR,
+    S_TEMPSTARTR, S_TEMPR,
+    S_TEMPSTARTW, S_TEMPW,
     S_HALT,
     S_SKIP
   );
@@ -142,26 +143,28 @@ begin
         pcInc <= '1';
         nextState <= S_DECODE;
       when S_DECODE =>
-          case DATA_RDATA is
-            when x"40" => -- @
-              nextState <= S_HALT;
-            when x"2B" => -- +
-              nextState <= S_INCSTART;
-            when x"2D" => -- -
-              nextState <= S_DECSTART;
-            when x"3E" => -- >
-              nextState <= S_INCPTR;
-            when x"3C" => -- <
-              nextState <= S_DECPTR;
-            when x"2E" => -- .
-              nextState <= S_PRINT;
-            when x"2C" => -- ,
-              nextState <= S_INPUT;
-            when X"24" => -- $
-              nextState <= S_TMPSTARTR;
-            when others =>
-              nextState <= S_SKIP;
-          end case;
+        case DATA_RDATA is
+          when x"40" => -- @
+            nextState <= S_HALT;
+          when x"2B" => -- +
+            nextState <= S_INCSTART;
+          when x"2D" => -- -
+            nextState <= S_DECSTART;
+          when x"3E" => -- >
+            nextState <= S_INCPTR;
+          when x"3C" => -- <
+            nextState <= S_DECPTR;
+          when x"2E" => -- .
+            nextState <= S_PRINT;
+          when x"2C" => -- ,
+            nextState <= S_INPUT;
+          when X"24" => -- $
+            nextState <= S_TEMPSTARTR;
+          when X"21" => -- !
+            nextState <= S_TEMPSTARTW;
+          when others =>
+            nextState <= S_SKIP;
+        end case;
       when S_INCSTART =>
         muxAddress <= '0';
         DATA_EN <= '1';
@@ -223,16 +226,26 @@ begin
       when S_READINPUT =>
         DATA_RDWR <= '1';
         nextState <= S_FETCH;
-      when S_TMPSTARTR =>
+      when S_TEMPSTARTR =>
         muxAddress <= '0';
         DATA_EN <= '1';
         DATA_RDWR <= '1';
-        tempId <= '0';
-        nextState <= S_TMPR;
-      when S_TMPR =>
+        nextState <= S_TEMPR;
+      when S_TEMPR =>
         DATA_EN <= '1';
         DATA_RDWR <= '0';
+        tempId <= '0';
         muxAddress <= '0';
+        nextState <= S_FETCH;
+      when S_TEMPSTARTW =>
+        muxAddress <= '0';
+        DATA_EN <= '1';
+        DATA_RDWR <= '1';
+        nextState <= S_TEMPW;
+      when S_TEMPW =>
+        muxWrite <= "01";
+        DATA_EN <= '1';
+        data_RDWR <= '0';
         nextState <= S_FETCH;
       when S_SKIP =>
         nextState <= S_FETCH;
@@ -311,13 +324,13 @@ begin
   end process;
 
   -- MX2 register
-  p_MX2 : process (muxWrite, IN_DATA, DATA_RDATA)
+  p_MX2 : process (muxWrite, IN_DATA, DATA_RDATA, temp)
   begin
     case muxWrite is
       when "00" =>
         DATA_WDATA <= IN_DATA;
       when "01" =>
-        DATA_WDATA <= DATA_RDATA;
+        DATA_WDATA <= temp;
       when "10" =>
         DATA_WDATA <= DATA_RDATA - 1;
       when "11" =>
