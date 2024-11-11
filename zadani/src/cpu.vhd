@@ -95,6 +95,7 @@ architecture behavioral of cpu is
 
 begin
 
+  -- Switch state based on CLK
   switchState: process(CLK, RESET)
   begin
     if RESET = '1' then
@@ -106,6 +107,7 @@ begin
     end if;
   end process;
 
+  -- Switching states logic
   stateLogic: process(currState, DATA_RDATA)
   begin
     OUT_DATA <= DATA_RDATA;
@@ -124,6 +126,7 @@ begin
     cntInc <= '0';
     cntDec <= '0';
 
+    -- Switching between the FSM states
     case currState is 
       when S_RESET =>
         READY <= '0';
@@ -147,29 +150,29 @@ begin
         nextState <= S_DECODE;
       when S_DECODE =>
         case DATA_RDATA is
-          when x"40" => -- @
+          when x"40" => -- "@" halt
             nextState <= S_HALT;
-          when x"2B" => -- +
+          when x"2B" => -- "+" increment *ptr
             nextState <= S_INC_START;
-          when x"2D" => -- -
+          when x"2D" => -- "-" decrement *ptr
             nextState <= S_DEC_START;
-          when x"3E" => -- >
+          when x"3E" => -- ">" move pointer to the right
             nextState <= S_INC_PTR;
-          when x"3C" => -- <
+          when x"3C" => -- "<" move pointer to the left
             nextState <= S_DEC_PTR;
-          when x"2E" => -- .
+          when x"2E" => -- "." print value of the current cell
             nextState <= S_PRINT;
-          when x"2C" => -- ,
+          when x"2C" => -- "," read the value and store it into the current cell
             nextState <= S_INPUT;
-          when X"24" => -- $
+          when X"24" => -- "$" store the value to temp variable
             nextState <= S_TEMP_START_R;
-          when X"21" => -- !
+          when X"21" => -- "!" read value from temp variable and store it to the current cell
             nextState <= S_TEMP_START_W;
-          when X"5B" =>
+          when X"5B" => -- "[" start of the while loop
             nextState <= S_WHILE;
-          when X"5D" =>
+          when X"5D" => -- "]" end of the while loop
             nextState <= S_WHILE_END;
-          when others =>
+          when others => -- Skip other signs
             nextState <= S_SKIP;
         end case;
       when S_INC_START =>
