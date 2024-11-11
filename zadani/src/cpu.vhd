@@ -52,16 +52,19 @@ architecture behavioral of cpu is
     S_INIT,
     S_FETCH,
     S_DECODE,
-    S_INCVAL, S_INCSTART,
-    S_DECVAL, S_DECSTART,
-    S_INCPTR, S_DECPTR,
-    S_PRINT, S_STALLPRINT,
-    S_INPUT, S_STALLINPUT, S_READINPUT,
-    S_TEMPSTARTR, S_TEMPR,
-    S_TEMPSTARTW, S_TEMPW,
+    S_INC_VAL, S_INC_START,
+    S_DEC_VAL, S_DEC_START,
+    S_INC_PTR, S_DEC_PTR,
+    S_PRINT, S_STALL_PRINT,
+    S_INPUT, S_STALL_INPUT, S_READ_INPUT,
+    S_TEMP_START_R, S_TEMP_R,
+    S_TEMP_START_W, S_TEMP_W,
+    S_WHILE, S_WHILE_2, S_WHILE_3, S_WHILE_4,
+    S_WHILE_END, S_WHILE_END_2, S_WHILE_END_3, S_WHILE_END_4,
     S_HALT,
     S_SKIP
   );
+
   signal currState : states := S_RESET;
   signal nextState : states := S_RESET;
 
@@ -111,6 +114,7 @@ begin
     muxWrite <= "00";
     muxAddress <= '0';
     OUT_WE <= '0';
+    OUT_INV <= '0';
     DATA_EN <= '0';
     IN_REQ <= '0';
     pcInc <= '0';
@@ -140,68 +144,76 @@ begin
         muxAddress <= '1';
         DATA_RDWR <= '1';
         DATA_EN <= '1';
-        pcInc <= '1';
         nextState <= S_DECODE;
       when S_DECODE =>
         case DATA_RDATA is
           when x"40" => -- @
             nextState <= S_HALT;
           when x"2B" => -- +
-            nextState <= S_INCSTART;
+            nextState <= S_INC_START;
           when x"2D" => -- -
-            nextState <= S_DECSTART;
+            nextState <= S_DEC_START;
           when x"3E" => -- >
-            nextState <= S_INCPTR;
+            nextState <= S_INC_PTR;
           when x"3C" => -- <
-            nextState <= S_DECPTR;
+            nextState <= S_DEC_PTR;
           when x"2E" => -- .
             nextState <= S_PRINT;
           when x"2C" => -- ,
             nextState <= S_INPUT;
           when X"24" => -- $
-            nextState <= S_TEMPSTARTR;
+            nextState <= S_TEMP_START_R;
           when X"21" => -- !
-            nextState <= S_TEMPSTARTW;
+            nextState <= S_TEMP_START_W;
+          when X"5B" =>
+            nextState <= S_WHILE;
+          when X"5D" =>
+            nextState <= S_WHILE_END;
           when others =>
             nextState <= S_SKIP;
         end case;
-      when S_INCSTART =>
+      when S_INC_START =>
         muxAddress <= '0';
         DATA_EN <= '1';
         DATA_RDWR <= '1';
-        nextState <= S_INCVAL;
-      when S_INCVAL =>
+        nextState <= S_INC_VAL;
+      when S_INC_VAL =>
         muxWrite <= "11";
         DATA_EN <= '1';
         DATA_RDWR <= '0';
         muxAddress <= '0';
+        pcInc <= '1';
         nextState <= S_FETCH;
-      when S_DECSTART =>
+      when S_DEC_START =>
         muxAddress <= '0';
         DATA_EN <= '1';
         DATA_RDWR <= '1';
-        nextState <= S_DECVAL;
-      when S_DECVAL =>
+        nextState <= S_DEC_VAL;
+      when S_DEC_VAL =>
         muxWrite <= "10";
         DATA_EN <= '1';
         DATA_RDWR <= '0';
         muxAddress <= '0';
+        pcInc <= '1';
         nextState <= S_FETCH;
-      when S_INCPTR =>
+      when S_INC_PTR =>
         ptrInc <= '1';
+        pcInc <= '1';
         nextState <= S_FETCH;
-      when S_DECPTR =>
+      when S_DEC_PTR =>
         ptrDec <= '1';
+        pcInc <= '1';
         nextState <= S_FETCH;
       when S_PRINT =>
         muxAddress <= '0';
         DATA_EN <= '1';
         DATA_RDWR <= '1';
-        nextState <= S_STALLPRINT;
-      when S_STALLPRINT =>
+        nextState <= S_STALL_PRINT;
+      when S_STALL_PRINT =>
         if OUT_BUSY = '0' then
           OUT_DATA <= DATA_RDATA;
           OUT_wE <= '1';
+          pcInc <= '1';
           nextState <= S_FETCH;
         else
           nextState <= S_PRINT;
@@ -211,43 +223,109 @@ begin
         DATA_EN <= '1';
         DATA_RDWR <= '0';
         muxAddress <= '0';
-        nextState <= S_STALLINPUT;
-      when S_STALLINPUT =>
+        nextState <= S_STALL_INPUT;
+      when S_STALL_INPUT =>
         if IN_VLD = '1' then
           DATA_EN <= '1';
           DATA_RDWR <= '0';
           IN_REQ <= '1';
           muxWrite <= "00";
-          nextState <= S_READINPUT;
+          nextState <= S_READ_INPUT;
         else 
           IN_REQ <= '1';
           nextState <= S_INPUT;
         end if;
-      when S_READINPUT =>
+      when S_READ_INPUT =>
         DATA_RDWR <= '1';
+        pcInc <= '1';
         nextState <= S_FETCH;
-      when S_TEMPSTARTR =>
+        when S_TEMP_START_R =>
         muxAddress <= '0';
         DATA_EN <= '1';
         DATA_RDWR <= '1';
-        nextState <= S_TEMPR;
-      when S_TEMPR =>
+        nextState <= S_TEMP_R;
+      when S_TEMP_R =>
         DATA_EN <= '1';
-        DATA_RDWR <= '0';
+        DATA_RDWR <= '1';
         tempId <= '0';
         muxAddress <= '0';
+        pcInc <= '1';
         nextState <= S_FETCH;
-      when S_TEMPSTARTW =>
+      when S_TEMP_START_W =>
         muxAddress <= '0';
         DATA_EN <= '1';
         DATA_RDWR <= '1';
-        nextState <= S_TEMPW;
-      when S_TEMPW =>
+        nextState <= S_TEMP_W;
+      when S_TEMP_W =>
         muxWrite <= "01";
         DATA_EN <= '1';
-        data_RDWR <= '0';
+        DATA_RDWR <= '0';
+        pcInc <= '1';
         nextState <= S_FETCH;
+      when S_WHILE =>
+        DATA_EN <= '1';
+        DATA_RDWR <= '1';
+        muxAddress <= '0';
+        pcInc <= '1';
+        nextState <= S_WHILE_2;
+      when S_WHILE_2 =>
+        if DATA_RDATA = x"00" then
+          cntInc <= '1';
+          nextState <= S_WHILE_3;
+        else
+          nextState <= S_FETCH;
+        end if ;
+      when S_WHILE_3 =>
+        if cnt = "00000000" then
+          nextState <= S_FETCH;
+        else
+          DATA_EN <= '1';
+          DATA_RDWR <= '1';
+          muxAddress <= '1';
+          nextState <= S_WHILE_4;
+        end if;
+      when S_WHILE_4 =>
+        if DATA_RDATA = x"5D" then
+          cntDec <= '1';
+        elsif DATA_RDATA = x"5B" then
+          cntInc <= '1';
+        end if;
+        pcInc <= '1';
+        nextState <= S_WHILE_3;
+      when S_WHILE_END =>
+        DATA_EN <= '1';
+        DATA_RDWR <= '1';
+        muxAddress <= '0';
+        nextState <= S_WHILE_END_2;
+      when S_WHILE_END_2 =>
+        if DATA_RDATA = x"00" then
+          pcInc <= '1';
+          nextState <= S_FETCH;
+        else
+          cntInc <= '1';
+          pcDec <= '1';
+          nextState <= S_WHILE_END_3;
+        end if;
+      when S_WHILE_END_3 =>
+        if cnt = "00000000" then
+          pcInc <= '1';
+          nextState <= S_FETCH;
+        else
+          DATA_EN <= '1';
+          DATA_RDWR <= '1';
+          muxAddress <= '1';
+          nextState <= S_WHILE_END_4;
+        end if;
+      when S_WHILE_END_4 =>
+        if DATA_RDATA = x"5B" then
+          cntDec <= '1';
+        elsif DATA_RDATA = x"5D" then
+          cntInc <= '1';
+        end if;
+        pcDec <= '1';
+        nextState <= S_WHILE_END_3;
       when S_SKIP =>
+        pcInc <= '1';
         nextState <= S_FETCH;
       when S_HALT =>
         DONE <= '1';
@@ -300,7 +378,7 @@ begin
   end process;
   
   -- TEMP register
-  p_TEMP : process(CLK, RESET, DATA_RDATA)
+  p_TEMP : process(CLK, RESET, DATA_RDATA, temp, tempId)
   begin
     if RESET = '1' then
       temp <= x"00";
@@ -324,7 +402,7 @@ begin
   end process;
 
   -- MX2 register
-  p_MX2 : process (muxWrite, IN_DATA, DATA_RDATA, temp)
+  p_MX2 : process (muxWrite, IN_DATA, DATA_RDATA)
   begin
     case muxWrite is
       when "00" =>
